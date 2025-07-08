@@ -12,27 +12,37 @@
       background: #f5f5f5;
     }
     h2 {
-      font-size: 1.5em;
+      font-size: 1.6em;
       margin-bottom: 1em;
     }
-    input, select, button {
+    input {
       font-size: 1.2em;
-      padding: 0.6em;
+      padding: 0.5em;
       width: 80%;
       max-width: 300px;
-      margin: 0.5em 0;
-      border-radius: 6px;
+      margin-bottom: 1em;
       border: 1px solid #ccc;
+      border-radius: 6px;
     }
     button {
-      background-color: #2196f3;
-      color: white;
+      font-size: 1.2em;
+      padding: 0.6em 1.5em;
       border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      min-width: 160px;
+      color: white;
+    }
+    .shukkin {
+      background-color: #4caf50;
+    }
+    .taikin {
+      background-color: #f44336;
     }
     #msg {
       margin-top: 1em;
       font-weight: bold;
-      color: #d00;
+      color: #c00;
     }
     .note {
       font-size: 0.9em;
@@ -47,14 +57,10 @@
   <!-- 社員番号入力欄 -->
   <input type="text" id="id" placeholder="社員番号を入力">
 
-  <!-- 出勤 or 退勤 選択 -->
-  <select id="type">
-    <option value="出勤">出勤</option>
-    <option value="退勤">退勤</option>
-  </select>
-
-  <!-- 打刻ボタン -->
-  <button onclick="send()">打刻</button>
+  <!-- 出退勤ボタン（1つ） -->
+  <div>
+    <button id="toggleBtn" onclick="handleClick()">出勤</button>
+  </div>
 
   <!-- メッセージ表示 -->
   <p id="msg"></p>
@@ -66,32 +72,33 @@
   </p>
 
   <script>
-    // 打刻送信処理ここから
-    function send() {
+    // 初期化：ボタンの状態をlocalStorageから復元
+    const btn = document.getElementById("toggleBtn");
+    const state = localStorage.getItem("status"); // "出勤済" or null
+    if (state === "出勤済") setToTaikin(); else setToShukkin();
+
+    // メインクリック処理
+    function handleClick() {
       const id = document.getElementById("id").value.trim();
-      const type = document.getElementById("type").value;
       const msg = document.getElementById("msg");
-      const button = document.querySelector("button");
 
       if (!id) {
         msg.textContent = "社員番号を入力してください";
         return;
       }
 
-      button.disabled = true;
+      btn.disabled = true;
       msg.textContent = "送信中...";
 
-      const url = "https://script.google.com/macros/s/あなたのデプロイURL/exec"; // ←ココを変更！
+      const type = btn.dataset.type; // 出勤 or 退勤
+      const url = "https://script.google.com/macros/s/あなたのデプロイURL/exec"; // ←差し替え必須
 
       fetch(url, {
         method: "POST",
         body: JSON.stringify({ id, type }),
         headers: { "Content-Type": "application/json" }
       })
-      .then(res => {
-        const contentType = res.headers.get("Content-Type") || "";
-        return contentType.includes("application/json") ? res.json() : res.text();
-      })
+      .then(res => res.headers.get("Content-Type")?.includes("json") ? res.json() : res.text())
       .then(data => {
         if (typeof data === "string") {
           msg.textContent = `${type}：${data}`;
@@ -104,6 +111,15 @@
             `🏢 勤務地: ${data.location || "未登録"}\n\n` +
             (type === "出勤" ? `🎯 ${data.message}` : `🌙 ${data.message}`)
           );
+
+          // 出勤 → 退勤に切り替え
+          if (type === "出勤") {
+            localStorage.setItem("status", "出勤済");
+            setToTaikin();
+          } else {
+            localStorage.removeItem("status");
+            setToShukkin();
+          }
         } else {
           msg.textContent = "不明な応答です";
         }
@@ -113,11 +129,23 @@
         console.error("fetch error:", err);
       })
       .finally(() => {
-        button.disabled = false;
-        // 社員番号は残す（valueをクリアしない）
+        btn.disabled = false;
       });
     }
-    // 打刻送信処理ここまで
+
+    // 出勤モード
+    function setToShukkin() {
+      btn.textContent = "出勤";
+      btn.className = "shukkin";
+      btn.dataset.type = "出勤";
+    }
+
+    // 退勤モード
+    function setToTaikin() {
+      btn.textContent = "退勤";
+      btn.className = "taikin";
+      btn.dataset.type = "退勤";
+    }
   </script>
 </body>
 </html>
