@@ -53,96 +53,86 @@
 </head>
 <body>
   <h2>出退勤システム</h2>
-
-  <!-- 社員番号入力欄 -->
   <input type="text" id="id" placeholder="社員番号を入力">
-
-  <!-- 出退勤ボタン（1つ） -->
   <div>
     <button id="toggleBtn" onclick="handleClick()">出勤</button>
   </div>
-
-  <!-- メッセージ表示 -->
   <p id="msg"></p>
-
-  <!-- 注意書き -->
-  <p class="note">
-    ⚠️ 出勤・退勤ボタンは<strong>同じ端末・同じブラウザ</strong>から押してください。<br>
-    （異なる端末やブラウザでは正しく記録できない可能性があります）
-  </p>
+  <p class="note">⚠️ 出勤・退勤ボタンは<strong>同じ端末・同じブラウザ</strong>から押してください。</p>
 
   <script>
-    // 初期化：ボタンの状態をlocalStorageから復元
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzbsUBOlNgOyJwrWrSJzKXiNO-nPF7MCmpqugxC4cOGA3OSWM9mscBMzOgLY8ayRtoJ/exec";
+
     const btn = document.getElementById("toggleBtn");
-    const state = localStorage.getItem("status"); // "出勤済" or null
-    if (state === "出勤済") setToTaikin(); else setToShukkin();
+    const idInput = document.getElementById("id");
+    const msg = document.getElementById("msg");
 
-    // メインクリック処理
+    // 初期表示
+    window.addEventListener("DOMContentLoaded", () => {
+      const savedId = localStorage.getItem("empId");
+      if (savedId) idInput.value = savedId;
+
+      const status = localStorage.getItem("status");
+      if (status === "出勤済") {
+        setToTaikin();
+      } else {
+        setToShukkin();
+      }
+    });
+
     function handleClick() {
-      const id = document.getElementById("id").value.trim();
-      const msg = document.getElementById("msg");
-
+      const id = idInput.value.trim();
       if (!id) {
         msg.textContent = "社員番号を入力してください";
         return;
       }
 
-      btn.disabled = true;
+      localStorage.setItem("empId", id);
+      const type = btn.dataset.type;
       msg.textContent = "送信中...";
+      btn.disabled = true;
 
-      const type = btn.dataset.type; // 出勤 or 退勤
-      const url = "https://script.google.com/macros/s/AKfycbxidB7OBAW5AujxJaSGykaVONhJixlDZYyeuRZlwsNtpPcrgE1z2H7I_ld0XnnyS0bD/exec"; // ←差し替え必須
-
-      fetch(url, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({ id, type })
-})
-      .then(res => res.headers.get("Content-Type")?.includes("json") ? res.json() : res.text())
-      .then(data => {
-        if (typeof data === "string") {
-          msg.textContent = `${type}：${data}`;
-        } else if (data.status === "OK") {
-          msg.textContent = `${type}：完了`;
-          alert(
-            `✅ ${type}を受け付けました！\n\n` +
-            `🕒 ${data.time}\n` +
-            `👤 ${data.name}（社員番号: ${data.id}）\n` +
-            `🏢 勤務地: ${data.location || "未登録"}\n\n` +
-            (type === "出勤" ? `🎯 ${data.message}` : `🌙 ${data.message}`)
-          );
-
-          // 出勤 → 退勤に切り替え
-          if (type === "出勤") {
-            localStorage.setItem("status", "出勤済");
-            setToTaikin();
+      fetch(GAS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ id, type })
+      })
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then(data => {
+          if (data.status === "OK") {
+            msg.textContent = `${type}完了`;
+            alert(`✅ ${type}受け付け\n🕒 ${data.time}\n👤 ${data.name}（${data.id}）\n🏢 ${data.location}\n${data.message}`);
+            if (type === "出勤") {
+              localStorage.setItem("status", "出勤済");
+              setToTaikin();
+            } else {
+              localStorage.removeItem("status");
+              setToShukkin();
+            }
           } else {
-            localStorage.removeItem("status");
-            setToShukkin();
+            msg.textContent = "エラー：" + (data.message || "不明なエラー");
           }
-        } else {
-          msg.textContent = "不明な応答です";
-        }
-      })
-      .catch(err => {
-        msg.textContent = "エラーが発生しました";
-        console.error("fetch error:", err);
-      })
-      .finally(() => {
-        btn.disabled = false;
-      });
+        })
+        .catch(err => {
+          msg.textContent = "通信エラー";
+          console.error(err);
+        })
+        .finally(() => {
+          btn.disabled = false;
+        });
     }
 
-    // 出勤モード
     function setToShukkin() {
       btn.textContent = "出勤";
       btn.className = "shukkin";
       btn.dataset.type = "出勤";
     }
 
-    // 退勤モード
     function setToTaikin() {
       btn.textContent = "退勤";
       btn.className = "taikin";
